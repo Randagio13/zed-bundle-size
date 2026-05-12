@@ -3,6 +3,7 @@
 
 # Node.js
 server/node_modules/
+server/.pnpm-store/
 
 # macOS
 .DS_Store

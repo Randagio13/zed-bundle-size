@@ -45,8 +45,8 @@ The extension runs a Node.js [Language Server Protocol](https://microsoft.github
 ```sh
 # Install Node.js server dependencies and build the bundled server
 cd server
-npm install
-node build.mjs
+pnpm install
+pnpm build
 cd ..
 ```
 
@@ -61,7 +61,7 @@ The Rust WASM wrapper is compiled automatically by Zed on first install.
 
 ```sh
 cd server
-node build.mjs
+pnpm build
 ```
 
 Reinstall the dev extension in Zed to pick up changes.
