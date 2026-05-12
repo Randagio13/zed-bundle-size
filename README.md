@@ -4,6 +4,10 @@ Display the minified + gzipped bundle size of npm packages inline in JavaScript 
 
 Inspired by the VS Code extension [vscode-bundle-size](https://github.com/ambar/vscode-bundle-size).
 
+## Sponsor
+
+If you find this extension useful, consider [sponsoring me on GitHub](https://github.com/sponsors/Randagio13) ❤️
+
 ## Features
 
 - ⚡ **Inline inlay hints** — shows `12.3 kB (4.1 kB gzipped)` after each import

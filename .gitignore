@@ -1,5 +1,6 @@
 # Rust build artifacts
 /target/
+extension.wasm
 
 # Node.js
 server/node_modules/
