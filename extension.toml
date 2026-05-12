@@ -3,8 +3,8 @@ name = "Bundle Size"
 description = "Display the bundle size of npm packages inline in JS/TS import statements"
 version = "0.1.0"
 schema_version = 1
-authors = ["Alessandro Arnodo"]
-repository = "https://github.com/alessandroarnodo/zed-bundle-size"
+authors = ["Alessandro Casazza"]
+repository = "https://github.com/Randagio13/zed-bundle-size"
 
 [language_servers.bundle-size]
 name = "Bundle Size Language Server"

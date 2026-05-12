@@ -42,6 +42,14 @@ connection.onInitialize((_params: InitializeParams): InitializeResult => {
   };
 });
 
+connection.onInitialized(() => {
+  connection.sendNotification("window/showMessage", {
+    type: 3, // MessageType.Info
+    message:
+      'Bundle Size: add `"inlay_hints": { "enabled": true }` to your Zed settings to see inline sizes.',
+  });
+});
+
 async function measureDoc(doc: TextDocument): Promise<void> {
   const uri = doc.uri;
   if (inFlight.has(uri)) return;
