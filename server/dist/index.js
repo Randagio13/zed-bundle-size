@@ -4556,8 +4556,8 @@ var require_main2 = __commonJS({
         }
         InlayHintLabelPart2.is = is;
       })(InlayHintLabelPart || (exports3.InlayHintLabelPart = InlayHintLabelPart = {}));
-      var InlayHint2;
-      (function(InlayHint3) {
+      var InlayHint;
+      (function(InlayHint2) {
         function create(position, label, kind) {
           var result = { position, label };
           if (kind !== void 0) {
@@ -4565,13 +4565,13 @@ var require_main2 = __commonJS({
           }
           return result;
         }
-        InlayHint3.create = create;
+        InlayHint2.create = create;
         function is(value) {
           var candidate = value;
           return Is.objectLiteral(candidate) && Position.is(candidate.position) && (Is.string(candidate.label) || Is.typedArray(candidate.label, InlayHintLabelPart.is)) && (candidate.kind === void 0 || InlayHintKind2.is(candidate.kind)) && candidate.textEdits === void 0 || Is.typedArray(candidate.textEdits, TextEdit.is) && (candidate.tooltip === void 0 || Is.string(candidate.tooltip) || MarkupContent.is(candidate.tooltip)) && (candidate.paddingLeft === void 0 || Is.boolean(candidate.paddingLeft)) && (candidate.paddingRight === void 0 || Is.boolean(candidate.paddingRight));
         }
-        InlayHint3.is = is;
-      })(InlayHint2 || (exports3.InlayHint = InlayHint2 = {}));
+        InlayHint2.is = is;
+      })(InlayHint || (exports3.InlayHint = InlayHint = {}));
       var StringValue;
       (function(StringValue2) {
         function createSnippet(value) {
@@ -51418,7 +51418,7 @@ var require_path = __commonJS({
     var REMOVED = exports2.REMOVED = 1 << 0;
     var SHOULD_STOP = exports2.SHOULD_STOP = 1 << 1;
     var SHOULD_SKIP = exports2.SHOULD_SKIP = 1 << 2;
-    var NodePath_Final = exports2.default = class NodePath2 {
+    var NodePath_Final = exports2.default = class NodePath {
       constructor(hub, parent) {
         this.contexts = [];
         this.state = null;
@@ -51476,7 +51476,7 @@ var require_path = __commonJS({
         const paths = cache.getOrCreateCachedPaths(parent, parentPath);
         let path4 = paths.get(targetNode);
         if (!path4) {
-          path4 = new NodePath2(hub, parent);
+          path4 = new NodePath(hub, parent);
           if (targetNode) paths.set(targetNode, path4);
         }
         _context.setup.call(path4, parentPath, container, listKey, key);
@@ -52437,12 +52437,203 @@ function getWellformedEdit(textEdit) {
 }
 
 // src/measure.ts
-var import_fs3 = require("fs");
-var import_path4 = __toESM(require("path"));
+var import_node_fs2 = require("node:fs");
+var import_node_module2 = require("node:module");
+var import_node_path3 = __toESM(require("node:path"));
+var import_node_util = require("node:util");
+var import_node_zlib = __toESM(require("node:zlib"));
 var import_bytes2 = __toESM(require_bytes());
-var import_util2 = require("util");
-var import_zlib = __toESM(require("zlib"));
-var import_module2 = require("module");
+
+// src/analyzeMetafile.ts
+var import_node_path = __toESM(require("node:path"));
+var import_bytes = __toESM(require_bytes());
+var groupBy = (list = [], fn) => {
+  const group = /* @__PURE__ */ new Map();
+  for (const x of list) {
+    const key = fn(x);
+    const value = group.get(key);
+    if (value) {
+      value.push(x);
+    } else {
+      group.set(key, [x]);
+    }
+  }
+  return group;
+};
+var splitModuleName = (modulePath = "") => {
+  const [p1, p2, ...rest] = modulePath.split(import_node_path.default.sep);
+  return p1.startsWith("@") ? [`${p1}/${p2}`, rest.join(import_node_path.default.sep)] : [p1, [p2, ...rest].join(import_node_path.default.sep)];
+};
+var npmDir = "node_modules";
+var maxFilesInCell = 10;
+function analyzeMetafile(data) {
+  const { outputs } = data;
+  const markdown = [];
+  for (const [outputName, outputStats] of Object.entries(outputs)) {
+    const { entryPoint, inputs, bytes: totalBytes } = outputStats;
+    const list = Object.entries(inputs).map(([x, { bytesInOutput }]) => {
+      let names;
+      const index = x.indexOf(npmDir);
+      if (x === entryPoint) {
+        names = { parent: "", head: x, file: "" };
+      } else if (index !== -1) {
+        const parent = x.slice(0, index);
+        const [moduleName, part2] = splitModuleName(
+          x.slice(index + npmDir.length + 1)
+        );
+        names = { parent, head: moduleName, file: part2 };
+      } else {
+        const reParent = /^((\.\.[/\\])+)/;
+        const parts = x.split(reParent);
+        const [part1, parent, , rest] = parts;
+        if (parent) {
+          names = {
+            parent,
+            head: import_node_path.default.dirname(rest),
+            file: import_node_path.default.basename(rest)
+          };
+        } else {
+          names = {
+            parent: "",
+            head: import_node_path.default.dirname(part1),
+            file: import_node_path.default.basename(part1)
+          };
+        }
+      }
+      return { names, bytesInOutput };
+    });
+    const group = groupBy(list, (x) => x.names.parent);
+    const nameGrouped = [...group].map(
+      ([, entries]) => groupBy(entries, (x) => x.names.head)
+    );
+    const head = ["Input", "Files", "Size", "Percent"];
+    const lines = [
+      `| ${head.join(" | ")} |`,
+      `| ${head.map(() => "---").join(" | ")} |`
+    ];
+    const leadingRow = {
+      name: outputName,
+      files: "",
+      size: totalBytes,
+      percent: "100%"
+    };
+    const rows = [leadingRow];
+    for (const map of nameGrouped) {
+      for (const [name, group2] of map) {
+        const files = group2.map((x) => ({ name: x.names.file, size: x.bytesInOutput })).sort((a, b) => b.size - a.size);
+        const bytesAcc = group2.reduce((acc, x) => acc + x.bytesInOutput, 0);
+        if (bytesAcc === 0) continue;
+        const percent = `${(bytesAcc / totalBytes * 100).toFixed(1)}%`;
+        const getFiles = () => {
+          if (files.length === 1) return files[0].name;
+          const format = (x) => `${x.name} (${(0, import_bytes.default)(x.size)})`;
+          if (files.length > maxFilesInCell) {
+            const rest = files.slice(maxFilesInCell);
+            const restSize = rest.reduce((acc, x) => acc + x.size, 0);
+            return files.slice(0, maxFilesInCell).map(format).join(", ") + `, and ${rest.length} other ${rest.length > 1 ? "files" : "file"} (${(0, import_bytes.default)(restSize)})`;
+          }
+          return files.map(format).join(", ");
+        };
+        rows.push({
+          name: `\u21AA ${name}`,
+          files: getFiles(),
+          size: bytesAcc,
+          percent
+        });
+      }
+    }
+    const maxLen = Math.max(...rows.map((r) => r.files.length));
+    if (maxLen < 10) {
+      leadingRow.files = "&nbsp; ".repeat(10);
+    }
+    const code = (text) => `\`${text}\``;
+    for (const row of rows.sort((a, b) => b.size - a.size)) {
+      const cells = [code(row.name), row.files, (0, import_bytes.default)(row.size), row.percent];
+      lines.push(`| ${cells.join(" | ")} |`);
+    }
+    markdown.push(lines.join("\n"));
+  }
+  return markdown.join("\n\n");
+}
+
+// src/findPkg.ts
+var import_node_fs = require("node:fs");
+var import_node_module = require("node:module");
+var import_node_path2 = __toESM(require("node:path"));
+
+// node_modules/.pnpm/escalade@3.2.0/node_modules/escalade/dist/index.mjs
+var import_path = require("path");
+var import_fs = require("fs");
+var import_util = require("util");
+var toStats = (0, import_util.promisify)(import_fs.stat);
+var toRead = (0, import_util.promisify)(import_fs.readdir);
+async function dist_default(start, callback) {
+  let dir = (0, import_path.resolve)(".", start);
+  let tmp, stats = await toStats(dir);
+  if (!stats.isDirectory()) {
+    dir = (0, import_path.dirname)(dir);
+  }
+  while (true) {
+    tmp = await callback(dir, await toRead(dir));
+    if (tmp) return (0, import_path.resolve)(dir, tmp);
+    dir = (0, import_path.dirname)(tmp = dir);
+    if (tmp === dir) break;
+  }
+}
+
+// src/findPkg.ts
+var findPkg = (file) => {
+  return dist_default(file, (_, names) => {
+    if (names.includes("package.json")) {
+      return "package.json";
+    }
+  });
+};
+var readJson = async (file) => {
+  const content = await import_node_fs.promises.readFile(file, "utf-8");
+  return JSON.parse(content);
+};
+var findPkgByName = (file, moduleName, callback) => {
+  return dist_default(file, async (dir, names) => {
+    if (names.includes("package.json")) {
+      const pkgFile = import_node_path2.default.join(dir, "package.json");
+      const json = await readJson(pkgFile);
+      callback?.(pkgFile, json);
+      if (json.name === moduleName) {
+        return "package.json";
+      }
+    }
+  });
+};
+var findPkgs = async (modulePath, baseDir) => {
+  const contextRequire = (0, import_node_module.createRequire)(import_node_path2.default.resolve(baseDir, "<import>.js"));
+  const moduleFile = contextRequire.resolve(modulePath);
+  const isScoped = modulePath[0] === "@";
+  const [p1, p2] = isScoped ? modulePath.split("/") : [modulePath.split("/")[0], ""];
+  const moduleName = p1 + (isScoped ? "/" : "") + p2;
+  let rootPkg;
+  let rootPkgFile;
+  try {
+    rootPkgFile = `${moduleName}/package.json`;
+    rootPkg = require(rootPkgFile);
+  } catch {
+  }
+  let modulePkg;
+  let modulePkgFile;
+  if (moduleFile !== moduleName) {
+    const pairs = [];
+    const pkgFile = await findPkgByName(moduleFile, moduleName, (x, y) => {
+      pairs.push([x, y]);
+    });
+    if (pkgFile && pairs.length > 0) {
+      [rootPkgFile, rootPkg] = pairs[pairs.length - 1];
+      if (pairs.length > 1) {
+        [modulePkgFile, modulePkg] = pairs[0];
+      }
+    }
+  }
+  return { rootPkgFile, rootPkg, modulePkgFile, modulePkg };
+};
 
 // src/parse.ts
 var parser = __toESM(require_lib());
@@ -52465,7 +52656,7 @@ var parse2 = (input) => {
         info.namespace = { name: s.local.name, usingProps: [] };
       } else if (s.type === "ImportDefaultSpecifier") {
         info.names ??= {};
-        info.names["default"] = s.local.name;
+        info.names.default = s.local.name;
       } else if (s.type === "ImportSpecifier") {
         info.names ??= {};
         const imported = s.imported;
@@ -52524,198 +52715,10 @@ var exportImported = (info) => {
   ].filter(Boolean).join("\n");
 };
 
-// src/analyzeMetafile.ts
-var import_path = __toESM(require("path"));
-var import_bytes = __toESM(require_bytes());
-var groupBy = (list = [], fn) => {
-  const group = /* @__PURE__ */ new Map();
-  for (const x of list) {
-    const key = fn(x);
-    const value = group.get(key);
-    if (value) {
-      value.push(x);
-    } else {
-      group.set(key, [x]);
-    }
-  }
-  return group;
-};
-var splitModuleName = (modulePath = "") => {
-  const [p1, p2, ...rest] = modulePath.split(import_path.default.sep);
-  return p1.startsWith("@") ? [p1 + "/" + p2, rest.join(import_path.default.sep)] : [p1, [p2, ...rest].join(import_path.default.sep)];
-};
-var npmDir = "node_modules";
-var maxFilesInCell = 10;
-function analyzeMetafile(data) {
-  const { outputs } = data;
-  const markdown = [];
-  for (const [outputName, outputStats] of Object.entries(outputs)) {
-    const { entryPoint, inputs, bytes: totalBytes } = outputStats;
-    const list = Object.entries(inputs).map(([x, { bytesInOutput }]) => {
-      let names;
-      let index;
-      if (x === entryPoint) {
-        names = { parent: "", head: x, file: "" };
-      } else if ((index = x.indexOf(npmDir)) !== -1) {
-        const parent = x.slice(0, index);
-        const [moduleName, part2] = splitModuleName(
-          x.slice(index + npmDir.length + 1)
-        );
-        names = { parent, head: moduleName, file: part2 };
-      } else {
-        const reParent = /^((\.\.[/\\])+)/;
-        const parts = x.split(reParent);
-        const [part1, parent, , rest] = parts;
-        if (parent) {
-          names = {
-            parent,
-            head: import_path.default.dirname(rest),
-            file: import_path.default.basename(rest)
-          };
-        } else {
-          names = {
-            parent: "",
-            head: import_path.default.dirname(part1),
-            file: import_path.default.basename(part1)
-          };
-        }
-      }
-      return { names, bytesInOutput };
-    });
-    const group = groupBy(list, (x) => x.names.parent);
-    const nameGrouped = [...group].map(
-      ([, entries]) => groupBy(entries, (x) => x.names.head)
-    );
-    const head = ["Input", "Files", "Size", "Percent"];
-    const lines = [
-      `| ${head.join(" | ")} |`,
-      `| ${head.map(() => "---").join(" | ")} |`
-    ];
-    const leadingRow = {
-      name: outputName,
-      files: "",
-      size: totalBytes,
-      percent: "100%"
-    };
-    const rows = [leadingRow];
-    for (const map of nameGrouped) {
-      for (const [name, group2] of map) {
-        const files = group2.map((x) => ({ name: x.names.file, size: x.bytesInOutput })).sort((a, b) => b.size - a.size);
-        const bytesAcc = group2.reduce((acc, x) => acc + x.bytesInOutput, 0);
-        if (bytesAcc === 0) continue;
-        const percent = (bytesAcc / totalBytes * 100).toFixed(1) + "%";
-        const getFiles = () => {
-          if (files.length === 1) return files[0].name;
-          const format = (x) => `${x.name} (${(0, import_bytes.default)(x.size)})`;
-          if (files.length > maxFilesInCell) {
-            const rest = files.slice(maxFilesInCell);
-            const restSize = rest.reduce((acc, x) => acc + x.size, 0);
-            return files.slice(0, maxFilesInCell).map(format).join(", ") + `, and ${rest.length} other ${rest.length > 1 ? "files" : "file"} (${(0, import_bytes.default)(restSize)})`;
-          }
-          return files.map(format).join(", ");
-        };
-        rows.push({ name: "\u21AA " + name, files: getFiles(), size: bytesAcc, percent });
-      }
-    }
-    const maxLen = Math.max(...rows.map((r) => r.files.length));
-    if (maxLen < 10) {
-      leadingRow.files = "&nbsp; ".repeat(10);
-    }
-    const code = (text) => `\`${text}\``;
-    for (const row of rows.sort((a, b) => b.size - a.size)) {
-      const cells = [code(row.name), row.files, (0, import_bytes.default)(row.size), row.percent];
-      lines.push(`| ${cells.join(" | ")} |`);
-    }
-    markdown.push(lines.join("\n"));
-  }
-  return markdown.join("\n\n");
-}
-
-// node_modules/.pnpm/escalade@3.2.0/node_modules/escalade/dist/index.mjs
-var import_path2 = require("path");
-var import_fs = require("fs");
-var import_util = require("util");
-var toStats = (0, import_util.promisify)(import_fs.stat);
-var toRead = (0, import_util.promisify)(import_fs.readdir);
-async function dist_default(start, callback) {
-  let dir = (0, import_path2.resolve)(".", start);
-  let tmp, stats = await toStats(dir);
-  if (!stats.isDirectory()) {
-    dir = (0, import_path2.dirname)(dir);
-  }
-  while (true) {
-    tmp = await callback(dir, await toRead(dir));
-    if (tmp) return (0, import_path2.resolve)(dir, tmp);
-    dir = (0, import_path2.dirname)(tmp = dir);
-    if (tmp === dir) break;
-  }
-}
-
-// src/findPkg.ts
-var import_fs2 = require("fs");
-var import_module = require("module");
-var import_path3 = __toESM(require("path"));
-var findPkg = (file) => {
-  return dist_default(file, (_, names) => {
-    if (names.includes("package.json")) {
-      return "package.json";
-    }
-  });
-};
-var readJson = async (file) => {
-  const content = await import_fs2.promises.readFile(file, "utf-8");
-  return JSON.parse(content);
-};
-var findPkgByName = (file, moduleName, callback) => {
-  return dist_default(file, async (dir, names) => {
-    if (names.includes("package.json")) {
-      const pkgFile = import_path3.default.join(dir, "package.json");
-      const json = await readJson(pkgFile);
-      callback?.(pkgFile, json);
-      if (json.name === moduleName) {
-        return "package.json";
-      }
-    }
-  });
-};
-var findPkgs = async (modulePath, baseDir) => {
-  const contextRequire = (0, import_module.createRequire)(
-    import_path3.default.resolve(baseDir, "<import>.js")
-  );
-  const moduleFile = contextRequire.resolve(modulePath);
-  const isScoped = modulePath[0] === "@";
-  const [p1, p2] = isScoped ? modulePath.split("/") : [modulePath.split("/")[0], ""];
-  const moduleName = p1 + (isScoped ? "/" : "") + p2;
-  let rootPkg;
-  let rootPkgFile;
-  try {
-    rootPkgFile = `${moduleName}/package.json`;
-    rootPkg = require(rootPkgFile);
-  } catch {
-  }
-  let modulePkg;
-  let modulePkgFile;
-  if (moduleFile !== moduleName) {
-    const pairs = [];
-    const pkgFile = await findPkgByName(moduleFile, moduleName, (x, y) => {
-      pairs.push([x, y]);
-    });
-    if (pkgFile && pairs.length > 0) {
-      [rootPkgFile, rootPkg] = pairs[pairs.length - 1];
-      if (pairs.length > 1) {
-        [modulePkgFile, modulePkg] = pairs[0];
-      }
-    }
-  }
-  return { rootPkgFile, rootPkg, modulePkgFile, modulePkg };
-};
-
 // src/measure.ts
-var gzip = (0, import_util2.promisify)(import_zlib.default.gzip);
+var gzip = (0, import_node_util.promisify)(import_node_zlib.default.gzip);
 var gzipSize = (buf) => gzip(buf).then((x) => x.length);
-var reBuiltin = RegExp(
-  `^node:|^(${import_module2.builtinModules.join("|")})(/|$)`
-);
+var reBuiltin = RegExp(`^node:|^(${import_node_module2.builtinModules.join("|")})(/|$)`);
 var reNonRelative = /^[a-z@]/;
 var bundleCache = /* @__PURE__ */ new Map();
 var pickPkg = (pkg) => ({
@@ -52725,16 +52728,16 @@ var pickPkg = (pkg) => ({
   homepage: pkg.homepage,
   peerDependencies: pkg.peerDependencies
 });
-var builtinExternalPlugin = (esbuild) => ({
+var builtinExternalPlugin = (_esbuild) => ({
   name: "builtin-external",
   setup(build) {
-    build.onResolve(
-      { filter: reBuiltin, namespace: "file" },
-      (args) => ({ path: args.path, external: true })
-    );
+    build.onResolve({ filter: reBuiltin, namespace: "file" }, (args) => ({
+      path: args.path,
+      external: true
+    }));
   }
 });
-var peerExternalPlugin = (esbuild, peerDeps) => ({
+var peerExternalPlugin = (_esbuild, peerDeps) => ({
   name: "peer-external",
   setup(build) {
     if (peerDeps.length === 0) return;
@@ -52764,9 +52767,10 @@ async function bundle(statement, importInfo, {
   const esbuild = require("esbuild");
   const entryInput = `${statement}
 ${exportImported(importInfo)}`;
-  const { rootPkgFile, rootPkg, modulePkgFile, modulePkg } = await findPkgs(modulePath, baseDir).catch(
-    () => ({})
-  );
+  const { rootPkgFile, rootPkg, modulePkgFile, modulePkg } = await findPkgs(
+    modulePath,
+    baseDir
+  ).catch(() => ({}));
   const cacheKey = cacheOpt && rootPkg ? `${rootPkg.name}:${rootPkg.version}:${entryInput}` : null;
   if (cacheKey) {
     const cached = bundleCache.get(cacheKey);
@@ -52778,7 +52782,7 @@ ${exportImported(importInfo)}`;
       ...externalOpt
     ])
   ];
-  const workingDir = projectPkgFile ? import_path4.default.dirname(projectPkgFile) : baseDir;
+  const workingDir = projectPkgFile ? import_node_path3.default.dirname(projectPkgFile) : baseDir;
   const buildResult = await esbuild.build({
     stdin: {
       loader: "ts",
@@ -52841,7 +52845,7 @@ ${exportImported(importInfo)}`;
     size += s;
     zippedSize += z;
   }
-  const toRelative = (p) => import_path4.default.relative(process.cwd(), p);
+  const toRelative = (p) => import_node_path3.default.relative(process.cwd(), p);
   const result = {
     size,
     zippedSize,
@@ -52864,10 +52868,13 @@ var withValue = async (fn) => {
     return [err, void 0];
   }
 };
-var hasFile = async (file) => import_fs3.promises.stat(file).then(() => true, () => false);
+var hasFile = async (file) => import_node_fs2.promises.stat(file).then(
+  () => true,
+  () => false
+);
 async function* measureIterable(input, fileName, opts = {}) {
   const { stats, cache, workspaceFolder, external } = opts;
-  const baseDir = fileName && await hasFile(fileName) ? import_path4.default.dirname(fileName) : workspaceFolder && await hasFile(workspaceFolder) ? workspaceFolder : null;
+  const baseDir = fileName && await hasFile(fileName) ? import_node_path3.default.dirname(fileName) : workspaceFolder && await hasFile(workspaceFolder) ? workspaceFolder : null;
   if (!baseDir) {
     throw new Error("Cannot resolve `fileName` or `workspaceFolder`");
   }

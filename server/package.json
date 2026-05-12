@@ -1,27 +1,31 @@
 {
-  "name": "zed-bundle-size-server",
-  "version": "0.1.0",
-  "description": "LSP server for zed-bundle-size extension",
-  "main": "dist/index.js",
-  "packageManager": "pnpm@10.33.3",
-  "scripts": {
-    "build": "node build.mjs",
-    "dev": "node build.mjs --watch"
-  },
-  "dependencies": {
-    "@babel/parser": "^7.24.0",
-    "@babel/traverse": "^7.24.0",
-    "@babel/types": "^7.24.0",
-    "bytes": "^3.1.2",
-    "escalade": "^3.1.2",
-    "vscode-languageserver": "^9.0.1",
-    "vscode-languageserver-textdocument": "^1.0.11"
-  },
-  "devDependencies": {
-    "@types/babel__traverse": "^7.20.6",
-    "@types/bytes": "^3.1.4",
-    "@types/node": "^20.0.0",
-    "esbuild": "^0.25.0",
-    "typescript": "^5.4.5"
-  }
+	"name": "zed-bundle-size-server",
+	"version": "0.1.0",
+	"description": "LSP server for zed-bundle-size extension",
+	"main": "dist/index.js",
+	"packageManager": "pnpm@10.33.3",
+	"scripts": {
+		"build": "node build.mjs",
+		"dev": "node build.mjs --watch",
+		"check": "biome check --write .",
+		"lint": "biome lint .",
+		"format": "biome format --write ."
+	},
+	"dependencies": {
+		"@babel/parser": "^7.24.0",
+		"@babel/traverse": "^7.24.0",
+		"@babel/types": "^7.24.0",
+		"bytes": "^3.1.2",
+		"escalade": "^3.1.2",
+		"vscode-languageserver": "^9.0.1",
+		"vscode-languageserver-textdocument": "^1.0.11"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "^2.4.15",
+		"@types/babel__traverse": "^7.20.6",
+		"@types/bytes": "^3.1.4",
+		"@types/node": "^20.0.0",
+		"esbuild": "^0.25.0",
+		"typescript": "^5.4.5"
+	}
 }
