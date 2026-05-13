@@ -68,6 +68,34 @@ const y = ns.bar
 		const props = imports[0].namespace?.usingProps.map((p) => p.name);
 		expect(props).toEqual(expect.arrayContaining(["foo", "bar"]));
 	});
+
+	it("handles string literal import keys", () => {
+		const { imports } = parse(`import { "foo-bar" as fooBar } from 'pkg'`);
+		expect(imports[0].names).toEqual({ "foo-bar": "fooBar" });
+	});
+
+	it("handles mixed default and named specifiers", () => {
+		const { imports } = parse("import foo, { bar } from 'pkg'");
+		expect(imports[0].names).toEqual({ default: "foo", bar: "bar" });
+	});
+
+	it("does not track namespace property when the binding is shadowed by a local variable", () => {
+		const src = `
+import * as ns from 'pkg'
+function fn(ns: any) { ns.foo; }
+`;
+		const { imports } = parse(src);
+		expect(imports[0].namespace?.usingProps).toHaveLength(0);
+	});
+
+	it("does not track computed string bracket access on a namespace", () => {
+		const src = `
+import * as ns from 'pkg'
+const x = ns["key"];
+`;
+		const { imports } = parse(src);
+		expect(imports[0].namespace?.usingProps).toHaveLength(0);
+	});
 });
 
 // ── exportImported() ───────────────────────────────────────────────────────

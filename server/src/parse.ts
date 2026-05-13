@@ -39,7 +39,8 @@ export const parse = (input: string): ParseResult => {
 			} else if (s.type === "ImportDefaultSpecifier") {
 				info.names ??= {};
 				info.names.default = s.local.name;
-			} else if (s.type === "ImportSpecifier") {
+			} else {
+				// ImportSpecifier — the only remaining specifier type in practice
 				if (s.importKind === "type") continue;
 				info.names ??= {};
 				const imported = s.imported;
