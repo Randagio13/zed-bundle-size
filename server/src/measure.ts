@@ -14,12 +14,6 @@ const gzipSize = (buf: Buffer) => gzip(buf).then((x) => x.length);
 const reBuiltin = RegExp(`^node:|^(${builtinModules.join("|")})(/|$)`);
 const reNonRelative = /^[a-z@]/;
 
-/** Get the top-level package name from a module path */
-const _getPkgName = (modulePath: string) =>
-	modulePath[0] === "@"
-		? modulePath.split("/").slice(0, 2).join("/")
-		: modulePath.split("/")[0];
-
 type StatsOpt = boolean | "tree" | "table";
 
 export type BundleResult = {

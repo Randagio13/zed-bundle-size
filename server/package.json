@@ -3,10 +3,12 @@
 	"version": "0.1.0",
 	"description": "LSP server for zed-bundle-size extension",
 	"main": "dist/index.js",
-	"packageManager": "pnpm@10.33.3",
+	"packageManager": "pnpm@11.1.1",
 	"scripts": {
 		"build": "node build.mjs",
 		"dev": "node build.mjs --watch",
+		"test": "vitest run --coverage",
+		"test:watch": "vitest --coverage",
 		"check": "biome check --write .",
 		"lint": "biome lint .",
 		"format": "biome format --write ."
@@ -25,7 +27,10 @@
 		"@types/babel__traverse": "^7.20.6",
 		"@types/bytes": "^3.1.4",
 		"@types/node": "^20.0.0",
+		"@vitest/coverage-v8": "^4.1.6",
+		"empty-pkg": "file:./test-fixtures/empty-pkg",
 		"esbuild": "^0.25.0",
-		"typescript": "^5.4.5"
+		"typescript": "^5.4.5",
+		"vitest": "^4.1.6"
 	}
 }

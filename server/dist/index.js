@@ -52658,6 +52658,7 @@ var parse2 = (input) => {
         info.names ??= {};
         info.names.default = s.local.name;
       } else if (s.type === "ImportSpecifier") {
+        if (s.importKind === "type") continue;
         info.names ??= {};
         const imported = s.imported;
         const importedName = imported.type === "StringLiteral" ? imported.value : imported.name;
@@ -52908,7 +52909,9 @@ var SUPPORTED = /* @__PURE__ */ new Set([
   "typescript",
   "typescriptreact"
 ]);
+console.log("Bundle Size extension initialized");
 connection.onInitialize((_params) => {
+  console.log("LSP Initialize called");
   return {
     capabilities: {
       textDocumentSync: import_node.TextDocumentSyncKind.Full,
@@ -52918,6 +52921,7 @@ connection.onInitialize((_params) => {
   };
 });
 connection.onInitialized(() => {
+  console.log("LSP Initialized");
   connection.sendNotification("window/showMessage", {
     type: 3,
     // MessageType.Info
@@ -52929,6 +52933,7 @@ async function measureDoc(doc) {
   if (inFlight.has(uri)) return;
   inFlight.add(uri);
   try {
+    console.log("Measuring document:", uri);
     const filePath = uri.startsWith("file://") ? decodeURIComponent(uri.slice(7)) : uri;
     const results = [];
     for await (const r of measureIterable(doc.getText(), filePath, {
@@ -52938,8 +52943,10 @@ async function measureDoc(doc) {
       results.push(r);
     }
     measureCache.set(uri, results);
-    connection.sendNotification("workspace/inlayHint/refresh");
+    console.log("Sending inlayHint/refresh for:", uri);
+    await connection.languages.inlayHint.refresh();
   } catch (err) {
+    console.error(`[bundle-size] Failed to measure ${uri}:`, err);
     connection.console.error(
       `[bundle-size] Failed to measure ${uri}: ${String(err)}`
     );
@@ -52947,7 +52954,7 @@ async function measureDoc(doc) {
     inFlight.delete(uri);
   }
 }
-function scheduleDoc(doc, delayMs = 300) {
+function scheduleDoc(doc, delayMs = 50) {
   const uri = doc.uri;
   const existing = debounceTimers.get(uri);
   if (existing) clearTimeout(existing);
@@ -52960,10 +52967,12 @@ function scheduleDoc(doc, delayMs = 300) {
   );
 }
 documents.onDidOpen((e) => {
+  console.log("Document opened:", e.document.languageId);
   if (SUPPORTED.has(e.document.languageId)) scheduleDoc(e.document, 0);
 });
 documents.onDidChangeContent((e) => {
-  if (SUPPORTED.has(e.document.languageId)) scheduleDoc(e.document, 500);
+  console.log("Document changed:", e.document.languageId);
+  if (SUPPORTED.has(e.document.languageId)) scheduleDoc(e.document, 50);
 });
 documents.onDidClose((e) => {
   measureCache.delete(e.document.uri);
@@ -52971,28 +52980,35 @@ documents.onDidClose((e) => {
   if (t) clearTimeout(t);
   debounceTimers.delete(e.document.uri);
 });
-connection.onRequest(
-  "textDocument/inlayHint",
-  (params) => {
-    const doc = documents.get(params.textDocument.uri);
-    if (!doc || !SUPPORTED.has(doc.languageId)) return [];
-    const results = measureCache.get(params.textDocument.uri);
-    if (!results) {
-      void scheduleDoc(doc, 0);
-      return [];
-    }
-    return results.filter((r) => r.result != null).map((r) => {
-      const pos = doc.positionAt(r.importInfo.end);
-      const { size, zippedSize } = r.result.human;
-      return {
-        position: pos,
-        label: `${size} (${zippedSize} gzipped)`,
-        kind: import_node.InlayHintKind.Type,
-        paddingLeft: true
-      };
-    });
+connection.languages.inlayHint.on((params) => {
+  console.log("Inlay hint request for:", params.textDocument.uri);
+  const doc = documents.get(params.textDocument.uri);
+  if (!doc || !SUPPORTED.has(doc.languageId)) {
+    console.log("Unsupported document or language");
+    return [];
   }
-);
+  const results = measureCache.get(params.textDocument.uri);
+  if (!results) {
+    console.log("No results cached, triggering measurement");
+    void scheduleDoc(doc, 0);
+    return [];
+  }
+  console.log("Returning", results.length, "inlay hints");
+  return results.filter((r) => r.result != null).map((r) => {
+    const pos = doc.positionAt(r.importInfo.end);
+    const { size, zippedSize } = r.result.human;
+    const hintPosition = {
+      line: pos.line,
+      character: Math.max(0, pos.character + 1)
+    };
+    return {
+      position: hintPosition,
+      label: `${size} (${zippedSize} gzipped)`,
+      kind: import_node.InlayHintKind.Type,
+      paddingLeft: true
+    };
+  });
+});
 connection.onHover((params) => {
   const doc = documents.get(params.textDocument.uri);
   if (!doc) return null;
@@ -53044,6 +53060,7 @@ connection.onHover((params) => {
 });
 documents.listen(connection);
 connection.listen();
+console.log("Bundle Size server started and listening");
 /*! Bundled license information:
 
 bytes/index.js:
