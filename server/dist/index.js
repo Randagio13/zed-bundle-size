@@ -52658,6 +52658,7 @@ var parse2 = (input) => {
         info.names ??= {};
         info.names.default = s.local.name;
       } else if (s.type === "ImportSpecifier") {
+        if (s.importKind === "type") continue;
         info.names ??= {};
         const imported = s.imported;
         const importedName = imported.type === "StringLiteral" ? imported.value : imported.name;

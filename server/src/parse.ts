@@ -40,6 +40,7 @@ export const parse = (input: string): ParseResult => {
 				info.names ??= {};
 				info.names.default = s.local.name;
 			} else if (s.type === "ImportSpecifier") {
+				if (s.importKind === "type") continue;
 				info.names ??= {};
 				const imported = s.imported;
 				const importedName =
